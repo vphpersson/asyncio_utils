@@ -54,18 +54,20 @@ async def limited_gather(
 
             signal_callback_finished()
 
+    tasks: list[Task] = []
+
     for iteration_value in iterable:
         await limiting_semaphore.acquire()
         num_started += 1
 
         passed_iteration_value_token: Token = passed_iteration_value_context_var.set(iteration_value)
 
-        Task(
-            coro=iteration_coroutine(iteration_value)
-        ).add_done_callback(
-            task_done_callback,
-            context=copy_context()
-        )
+        task = Task(coro=iteration_coroutine(iteration_value))
+        task.add_done_callback(task_done_callback, context=copy_context())
+
+        # NOTE: It seems like I must keep references to the tasks, otherwise they are prematurely "destroyed"
+        # (via garbage collection?).
+        tasks.append(task)
 
         passed_iteration_value_context_var.reset(passed_iteration_value_token)
 
